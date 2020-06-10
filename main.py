@@ -42,56 +42,58 @@ def main():
     nuReviews = twitter_train[twitter_train['sentiment'] == 'neutral']
     negReviews = twitter_train[twitter_train['sentiment'] == 'negative']
 
-    print("Pos Reviews", posReviews)
-    print("Nu Reviews", nuReviews)
-    print("Neg Reviews", negReviews)
+#    print("Pos Reviews", posReviews)
+#    print("Nu Reviews", nuReviews)
+#    print("Neg Reviews", negReviews)
 
-#    posText = [word for tweet in posReviews for word in list(set(vocabulary) & set(clean_text(tweet.split())))]
-posText = [word for tweet in posReviews["text"] for word in list(set(vocabulary) & set(clean_text(tweet).split()))]
-nuText = [word for tweet in nuReviews["text"] for word in list(set(vocabulary) & set(clean_text(tweet).split()))]
-negText = [word for tweet in negReviews["text"] for word in list(set(vocabulary) & set(clean_text(tweet).split()))]
+    #    posText = [word for tweet in posReviews for word in list(set(vocabulary) & set(clean_text(tweet.split())))]
+    posText = [word for tweet in posReviews["text"] for word in list(set(vocabulary) & set(clean_text(tweet).split()))]
+    nuText = [word for tweet in nuReviews["text"] for word in list(set(vocabulary) & set(clean_text(tweet).split()))]
+    negText = [word for tweet in negReviews["text"] for word in list(set(vocabulary) & set(clean_text(tweet).split()))]
 
-print("Pos text", posText)
-print("nu text", nuText)
-print("neg text", negText)
+#    print("Pos text", posText)
+#    print("nu text", nuText)
+#    print("neg text", negText)
+#
+    numReviewsTotal = len(twitter_train)
+    probPos = len(posReviews) / numReviewsTotal
+    probNu = len(nuReviews) / numReviewsTotal
+    probNeg = len(negReviews) / numReviewsTotal
 
+    # Counters for positive and negative word occurences
+    posNum = Counter(posText)
+    nuNum = Counter(posText)
+    negNum = Counter(negText)
 
-
-numReviewsTotal = len(twitter_train)
-probPos = len(posReviews) / numReviewsTotal
-probNuet = len(nuReviews) / numReviewsTotal
-probNeg = len(negReviews) / numReviewsTotal
-
-# Counters for positive and negative word occurences
-posNum = Counter(posText)
-nuNum = Counter(posText)
-negNum = Counter(negText)
-
-# # Debug print statements
-if (DEBUG_VALUES):
-    print("Total reviews: ", numReviewsTotal)
-    print("Prob pos: ", probPos)
-    print("Prob neg: ", probNeg)
-    print("Positive Text: ", posNum)
-    print("Negative Text: ", negNum)
+    # # Debug print statements
+    if (DEBUG_VALUES):
+        print("Total reviews: ", numReviewsTotal)
+        print("Prob pos: ", probPos)
+        print("Prob nu: ", probNu)
+        print("Prob neg: ", probNeg)
+        print("Positive Text: ", posNum)
+        print("Negative Text: ", negNum)
 
     # Set up training and testing run throughs
     f = open("results.txt", "w")
 
-    curData = [(training, "Training"), (testing, "Testing")]
-    for data in curData:
+    for data in twitter_test:
         # Run through the data for tuning
         correct, total = 0, 0
-        for i, review in enumerate(data[0]):
+        for i, review in enumerate(data):
             print("Testing #:", i + 1)
+            print(review)
 
             sentiment = classify(review[0],
                                  numReviewsTotal,
                                  probPos,
+                                 probNu,
                                  probNeg,
                                  posNum,
+                                 nuNum,
                                  negNum,
                                  posText,
+                                 nuText,
                                  negText,
                                  vocabulary,
                                  alpha
@@ -109,10 +111,10 @@ if (DEBUG_VALUES):
 
         print (data[1], "Accuracy:", correct / total)
         f.write(data[1] + " Accuracy: " + str(correct / total) + "\n")
-    f.write("Training data that was used was from file \'trainingSet.txt\' and testing data was from file \'testSet.txt\'\n")
+    f.write("Training data that was used was from file \'twitter_trainSet.txt\' and twitter_test data was from file \'testSet.txt\'\n")
     f.close()
 
-def classify(review, numTotalReviews, probPos, probNeg, posNum, negNum, posText, negText, vocabulary, alpha):
+def classify(review, numTotalReviews, probPos, probNu, probNeg, posNum, nuNum, negNum, posText, nuText, negText, vocabulary, alpha):
     # For each word in the cleaned text of the review
     pos, nu, neg = 0.0, 0.0, 0.0
     for word in clean_text(review).split():
@@ -126,8 +128,8 @@ def classify(review, numTotalReviews, probPos, probNeg, posNum, negNum, posText,
         pos += math.log(posNumerator)
 
         # Bayes for neutrality
-        probWordNuet = ((nuNum[word] + alpha) / (len(nuText) + (vocabLen * alpha)))
-        nuNumerator = (probWordNuet * probNuet)
+        probWordNu = ((nuNum[word] + alpha) / (len(nuText) + (vocabLen * alpha)))
+        nuNumerator = (probWordNu * probNu)
         nu += math.log(posNumerator)
 
         # Bayes for negativity
@@ -155,7 +157,7 @@ def classify(review, numTotalReviews, probPos, probNeg, posNum, negNum, posText,
     elif (nu > neg) and (nu > pos):
         return "neutral"
     else:
-        return 0
+        return "negative"
 
 
 

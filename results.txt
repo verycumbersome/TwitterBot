@@ -1,3 +1,0 @@
-Training Accuracy: 0.9519038076152304
-Testing Accuracy: 0.7645875251509054
-Training data that was used was from file 'trainingSet.txt' and testing data was from file 'testSet.txt'
