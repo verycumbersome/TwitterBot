@@ -4,32 +4,15 @@ from collections import Counter
 from sklearn.feature_extraction.text import CountVectorizer
 import re
 
-# Importing the dataset
-training = []
-with open("trainingSet.txt", 'r') as file:
-    line = file.readline()
-    i = 0
-    while line:
-        training.append(line.split('\t'))
-        line = file.readline()
-        training[i][1] = int(training[i][1][1])
-        i += 1
-
-testing = []
-with open("testSet.txt", 'r') as file:
-    line = file.readline()
-    i = 0
-    while line:
-        testing.append(line.split('\t'))
-        testing[i][1] = int(testing[i][1][1])
-        line = file.readline()
-        i += 1
-
 DEBUG_VALUES = False
 DEBUG_BAYES = False
 
 
 def main():
+    # Importing the dataset
+    twitter_train = pd.read_csv('tweet-sentiment-extraction/train.csv', delimiter=',')
+    twitter_test = pd.read_csv('tweet-sentiment-extraction/test.csv', delimiter=',')
+
     # this vectorizer will skip stop words
     vectorizer = CountVectorizer(
         stop_words="english",
@@ -38,9 +21,9 @@ def main():
         # min_df = 1 > 0.8447
         # min_df=50
     )
-
     # fit the vectorizer on the text
-    vectorizer.fit([i[0] for i in training])
+    twitter_train = twitter_train.dropna()
+    vectorizer.fit(twitter_train['selected_text'])
 
     # get the vocabulary
     inv_vocab = {v: k for k, v in vectorizer.vocabulary_.items()}
@@ -49,48 +32,52 @@ def main():
     alpha = 1.4
 
     posText = []
+    nuText = []
     negText = []
     text = []
 
-    posReviews, negReviews = [], []
-    for index, review in enumerate(training):
-        if (review[1]):
-#            print("Negative")
-            for word in list(set(vocabulary) & set(clean_text(review[0]).split())):
-                posText.append(word)
-                text.append(word)
+    posReviews, nuReviews, negReviews = [], [], []
 
-            posReviews.append(review[0])
+    posReviews = twitter_train[twitter_train['sentiment'] == 'positive']
+    nuReviews = twitter_train[twitter_train['sentiment'] == 'neutral']
+    negReviews = twitter_train[twitter_train['sentiment'] == 'negative']
 
-        else:
-#            print("Positive")
-            for word in list(set(vocabulary) & set(clean_text(review[0]).split())):
-                negText.append(word)
-                text.append(word)
+    print("Pos Reviews", posReviews)
+    print("Nu Reviews", nuReviews)
+    print("Neg Reviews", negReviews)
 
-            negReviews.append(review[0])
+#    posText = [word for tweet in posReviews for word in list(set(vocabulary) & set(clean_text(tweet.split())))]
+posText = [word for tweet in posReviews["text"] for word in list(set(vocabulary) & set(clean_text(tweet).split()))]
+nuText = [word for tweet in nuReviews["text"] for word in list(set(vocabulary) & set(clean_text(tweet).split()))]
+negText = [word for tweet in negReviews["text"] for word in list(set(vocabulary) & set(clean_text(tweet).split()))]
 
-
-    numReviewsTotal = len(training)
-    probPos = len(posReviews) / numReviewsTotal
-    probNeg = len(negReviews) / numReviewsTotal
-
-    # Counters for positive and negative word occurences
-    posNum = Counter(posText)
-    negNum = Counter(negText)
+print("Pos text", posText)
+print("nu text", nuText)
+print("neg text", negText)
 
 
-    # # Debug print statements
-    if (DEBUG_VALUES):
-        print("Total reviews: ", numReviewsTotal)
-        print("Prob pos: ", probPos)
-        print("Prob neg: ", probNeg)
-        print("Positive Text: ", posNum)
-        print("Negative Text: ", negNum)
+
+numReviewsTotal = len(twitter_train)
+probPos = len(posReviews) / numReviewsTotal
+probNuet = len(nuReviews) / numReviewsTotal
+probNeg = len(negReviews) / numReviewsTotal
+
+# Counters for positive and negative word occurences
+posNum = Counter(posText)
+nuNum = Counter(posText)
+negNum = Counter(negText)
+
+# # Debug print statements
+if (DEBUG_VALUES):
+    print("Total reviews: ", numReviewsTotal)
+    print("Prob pos: ", probPos)
+    print("Prob neg: ", probNeg)
+    print("Positive Text: ", posNum)
+    print("Negative Text: ", negNum)
 
     # Set up training and testing run throughs
     f = open("results.txt", "w")
-    
+
     curData = [(training, "Training"), (testing, "Testing")]
     for data in curData:
         # Run through the data for tuning
@@ -99,16 +86,16 @@ def main():
             print("Testing #:", i + 1)
 
             sentiment = classify(review[0],
-                numReviewsTotal,
-                probPos,
-                probNeg,
-                posNum,
-                negNum,
-                posText,
-                negText,
-                vocabulary,
-                alpha
-            )
+                                 numReviewsTotal,
+                                 probPos,
+                                 probNeg,
+                                 posNum,
+                                 negNum,
+                                 posText,
+                                 negText,
+                                 vocabulary,
+                                 alpha
+                                 )
 
             # Total number of correct
             if(sentiment == review[1]):
@@ -127,7 +114,7 @@ def main():
 
 def classify(review, numTotalReviews, probPos, probNeg, posNum, negNum, posText, negText, vocabulary, alpha):
     # For each word in the cleaned text of the review
-    pos, neg = 0.0, 0.0
+    pos, nu, neg = 0.0, 0.0, 0.0
     for word in clean_text(review).split():
         # getting values for bayes equation
         vocabLen = len(vocabulary)
@@ -138,6 +125,10 @@ def classify(review, numTotalReviews, probPos, probNeg, posNum, negNum, posText,
         posNumerator = (probWordPos * probPos)
         pos += math.log(posNumerator)
 
+        # Bayes for neutrality
+        probWordNuet = ((nuNum[word] + alpha) / (len(nuText) + (vocabLen * alpha)))
+        nuNumerator = (probWordNuet * probNuet)
+        nu += math.log(posNumerator)
 
         # Bayes for negativity
         probWordNeg = ((negNum[word] + alpha) / (len(negText) + (vocabLen * alpha)))
@@ -158,11 +149,12 @@ def classify(review, numTotalReviews, probPos, probNeg, posNum, negNum, posText,
             print("pos:", pos)
             print("neg:", neg)
 
-    if pos > neg:
-        # print("positive")
-        return 1
+    # Return values for positive, nuetral, or negative
+    if (pos > nu) and (pos > neg):
+        return "positive"
+    elif (nu > neg) and (nu > pos):
+        return "neutral"
     else:
-        # print("negative")
         return 0
 
 
