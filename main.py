@@ -74,6 +74,50 @@ class Sentiment():
 
             print("negative")
 
+    def naive_bayes(review, numTotalReviews, probPos, probNu, probNeg, posNum, nuNum, negNum, posText, nuText, negText, vocabulary, alpha):
+        # For each word in the cleaned text of the review
+        pos, nu, neg = 0.0, 0.0, 0.0
+        for word in clean_text(review).split():
+            # getting values for bayes equation
+            vocabLen = len(vocabulary)
+
+
+            # Bayes for positivity
+            probWordPos = ((posNum[word] + alpha) / (len(posText) + (vocabLen * alpha)))
+            posNumerator = (probWordPos * probPos)
+            pos += math.log(posNumerator)
+
+            # Bayes for neutrality
+            probWordNu = ((nuNum[word] + alpha) / (len(nuText) + (vocabLen * alpha)))
+            nuNumerator = (probWordNu * probNu)
+            nu += math.log(posNumerator)
+
+            # Bayes for negativity
+            probWordNeg = ((negNum[word] + alpha) / (len(negText) + (vocabLen * alpha)))
+            negNumerator = (probWordNeg * probNeg)
+            neg += math.log(negNumerator)
+
+
+            if (DEBUG_BAYES):
+                print("pos numerator", posNumerator)
+                print("pos denominator", posDenominator)
+                print("pos num/den", (posNumerator / posDenominator))
+
+                print("neg numerator", negNumerator)
+                print("neg denominator", negDenominator)
+                print("neg num/den", (negNumerator / negDenominator))
+
+                print("word", word)
+                print("pos:", pos)
+                print("neg:", neg)
+
+        # Return values for positive, nuetral, or negative
+        if (pos > nu) and (pos > neg):
+            return "positive"
+        elif (nu > neg) and (nu > pos):
+            return "neutral"
+        else:
+            return "negative"
 
     def clean_text(self, text):
         # remove HTML tags
