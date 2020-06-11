@@ -1,4 +1,6 @@
 import pandas as pd
+import string
+import numpy as np
 import math
 from collections import Counter
 from sklearn.feature_extraction.text import CountVectorizer
@@ -15,12 +17,11 @@ class Sentiment():
         vectorizer = CountVectorizer(
             stop_words="english",
             preprocessor=self.clean_text,
-            max_features=4400, # Probable best value
+            max_features=20000, # Probable best value
             # min_df = 1 > 0.8447
             # min_df=50
         )
         # fit the vectorizer on the text
-        self.training = self.training.dropna()
         vectorizer.fit(self.training['selected_text'])
 
         # get the vocabulary
@@ -61,6 +62,36 @@ class Sentiment():
         self.nuSelectedNum = Counter(self.selectedPosText)
         self.negSelectedNum = Counter(self.selectedNegText)
 
+        pos_words = {}
+        neutral_words = {}
+        neg_words = {}
+
+        for k in self.vocabulary:
+            pos = self.posNum[k]
+            neutral = self.nuNum[k]
+            neg = self.negNum[k]
+
+            pos_words[k] = pos/len(self.posText)
+            neutral_words[k] = neutral/len(self.nuText)
+            neg_words[k] = neg/len(self.negText)
+
+        # We need to account for the fact that there will be a lot of words used in tweets of every sentiment.
+        # Therefore, we reassign the values in the dictionary by subtracting the proportion of tweets in the other
+        # sentiments that use that word.
+
+        self.neg_words_adj = {}
+        self.pos_words_adj = {}
+        self.neutral_words_adj = {}
+
+        for key, value in neg_words.items():
+            self.neg_words_adj[key] = neg_words[key] - (neutral_words[key] + pos_words[key])
+
+        for key, value in pos_words.items():
+            self.pos_words_adj[key] = pos_words[key] - (neutral_words[key] + neg_words[key])
+
+        for key, value in neutral_words.items():
+            self.neutral_words_adj[key] = neutral_words[key] - (neg_words[key] + pos_words[key])
+
 
     def extract(self, text, selected_text, sentiment):
         # For each word in the cleaned text of the review
@@ -94,10 +125,10 @@ class Sentiment():
             return tweet
 
         elif(sentiment == 'positive'):
-            dict_to_use = pos_words_adj # Calculate word weights using the pos_words dictionary
+            dict_to_use = self.pos_words_adj # Calculate word weights using the pos_words dictionary
 
         elif(sentiment == 'negative'):
-            dict_to_use = neg_words_adj # Calculate word weights using the neg_words dictionary
+            dict_to_use = self.neg_words_adj # Calculate word weights using the neg_words dictionary
 
         words = tweet.split()
         words_len = len(words)
@@ -114,13 +145,17 @@ class Sentiment():
 
             # Calculate the sum of weights for each word in the substring
             for p in range(len(lst[i])):
-                if(lst[i][p].translate(str.maketrans('','',string.punctuation)) in dict_to_use.keys()):
-                    new_sum += dict_to_use[lst[i][p].translate(str.maketrans('','',string.punctuation))]
+
+                if(lst[i][p] in dict_to_use.keys()):
+                    new_sum += dict_to_use[lst[i][p]]
+            # print("sum: ", new_sum)
+            # print("list[i]: ", lst[i])
+            # print("\n\n\n")
 
             # If the sum is greater than the score, update our current selection
             if(new_sum > score + tol):
                 score = new_sum
-            selection_str = lst[i]
+                selection_str = lst[i]
             #tol = tol*5 # Increase the tolerance a bit each time we choose a selection
 
         # If we didn't find good substrings, return the whole text
@@ -153,17 +188,28 @@ class Sentiment():
 
 
 def main():
+    # load = np.load('incorrect_indexes.npy')
+    # print(load)
     twitter_train = pd.read_csv('tweet-sentiment-extraction/train.csv', delimiter=',')
     twitter_test = pd.read_csv('tweet-sentiment-extraction/test.csv', delimiter=',')
+    twitter_train = twitter_train.dropna()
+    print(len(twitter_train))
 
-    sentimentExtract = Sentiment(twitter_train, twitter_test)
+
+    sentimentExtract = Sentiment(twitter_train[0:21984], twitter_test)
     sentimentExtract.train()
 
+    sum = 0.0
     # Set up training and testing run throughs
-    for index, row in twitter_train.iterrows():
-        sentimentExtract.extract(row["text"], row["selected_text"], row["sentiment"])
-        sentimentExtract.calculate_selected_text(row, 0.001)
-
+    for index, row in twitter_train[21984:].iterrows():
+        # sentimentExtract.extract(row["text"], row["selected_text"], row["sentiment"])
+        prediction = sentimentExtract.calculate_selected_text(row, 0.0001)
+        # if (index > 50):
+        #     break
+        print("text:", row['text'], "\nselected:", row['selected_text'], "\nprediction: ", prediction)
+        print("\n\n\n\n")
+        sum += jaccard(row['selected_text'], prediction)
+    print(((1/len(twitter_train[21984:]))*sum))
 
 def eval(truth, pred):
     n = len(truth)
@@ -178,6 +224,7 @@ def jaccard(str1, str2):
     b = set(str2.lower().split())
     c = a.intersection(b)
     return float(len(c)) / (len(a) + len(b) - len(c))
+
 
 if __name__ == "__main__":
     main()
