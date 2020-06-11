@@ -29,28 +29,49 @@ class Sentiment():
         self.vocabulary = [inv_vocab[i] for i in range(len(inv_vocab))]
 
 
-    def train(self):
-	# Classify all reviews into arrays
-        self.posReviews = self.training[self.training['sentiment'] == 'positive']
-        self.nuReviews = self.training[self.training['sentiment'] == 'neutral']
-        self.negReviews = self.training[self.training['sentiment'] == 'negative']
+    def calculate_tuples(self, sentiment, dRow, isTuple=1):
+        tweets = self.training[self.training['sentiment'] == sentiment]
+        tuples = []
 
         # Get all words from dataset
-        self.posText = [word for tweet in self.posReviews["text"] for word in list(set(self.vocabulary) & set(self.clean_text(tweet).split()))]
-        self.nuText = [word for tweet in self.nuReviews["text"] for word in list(set(self.vocabulary) & set(self.clean_text(tweet).split()))]
-        self.negText = [word for tweet in self.negReviews["text"] for word in list(set(self.vocabulary) & set(self.clean_text(tweet).split()))]
-        self.text = [word for tweet in self.training["text"] for word in list(set(self.vocabulary) & set(self.clean_text(tweet).split()))]
+        for tweet in tweets[dRow]:
+            cleanTweet = list(set(self.vocabulary) & set(self.clean_text(tweet).split()))
+            if (isTuple):
+                for index, word in enumerate(cleanTweet):
+                    if (index == len(cleanTweet) - 1):
+                        break
+
+                    tuples.append((word, cleanTweet[index + 1]))
+            else:
+                for word in cleanTweet:
+                    tuples.append(word)
+
+        return tuples
+
+
+    def train(self):
+        # Get all words from dataset
+        self.posText = self.calculate_tuples("positive", "text", 0)
+        self.nuText = self.calculate_tuples("neutral", "text", 0)
+        self.negText = self.calculate_tuples("negative", "text", 0)
 
         # Get all words from selected dataset
-        self.selectedPosText = [word for tweet in self.posReviews["selected_text"] for word in list(set(self.vocabulary) & set(self.clean_text(tweet).split()))]
-        self.selectedNuText = [word for tweet in self.nuReviews["selected_text"] for word in list(set(self.vocabulary) & set(self.clean_text(tweet).split()))]
-        self.selectedNegText = [word for tweet in self.negReviews["selected_text"] for word in list(set(self.vocabulary) & set(self.clean_text(tweet).split()))]
+        self.selectedPosText = self.calculate_tuples("positive", "selected_text", 0)
+        self.selectedNuText = self.calculate_tuples("neutral", "selected_text", 0)
+        self.selectedNegText = self.calculate_tuples("negative", "selected_text", 0)
+
+        # Get all words from dataset
+        self.posTuples = self.calculate_tuples("positive", "text")
+        self.nuTuples = self.calculate_tuples("neutral", "text")
+        self.negTuples = self.calculate_tuples("negative", "text")
+
+        # Get all words from selected dataset
+        self.selectedPosTuples = self.calculate_tuples("positive", "selected_text")
+        self.selectedNuTuples = self.calculate_tuples("neutral", "selected_text")
+        self.selectedNegTuples = self.calculate_tuples("negative", "selected_text")
 
         # Get counters for all word in classifications
         self.numReviewsTotal = len(self.training)
-        self.probPos = len(self.posReviews) / self.numReviewsTotal
-        self.probNu = len(self.nuReviews) / self.numReviewsTotal
-        self.probNeg = len(self.negReviews) / self.numReviewsTotal
 
         # Counters for positive and negative word occurences
         self.posNum = Counter(self.posText)
@@ -62,9 +83,25 @@ class Sentiment():
         self.nuSelectedNum = Counter(self.selectedPosText)
         self.negSelectedNum = Counter(self.selectedNegText)
 
+        # Counters for positive and negative word occurences
+        self.posNumTuples = Counter(self.posTuples)
+        self.nuNumTuples = Counter(self.nuTuples)
+        self.negNumTuples = Counter(self.negTuples)
+
+        # Counters for positive and negative word occurences
+        self.posSelectedNumTuples = Counter(self.selectedPosTuples)
+        self.nuSelectedNumTuples = Counter(self.selectedNuTuples)
+        self.negSelectedNumTuples = Counter(self.selectedNegTuples)
+
+        self.allTuples = {**self.posNumTuples, **self.nuNumTuples, **self.negNumTuples}
+
         pos_words = {}
         neutral_words = {}
         neg_words = {}
+
+        pos_tuples = {}
+        neutral_tuples = {}
+        neg_tuples = {}
 
         for k in self.vocabulary:
             pos = self.posNum[k]
@@ -75,6 +112,15 @@ class Sentiment():
             neutral_words[k] = neutral/len(self.nuText)
             neg_words[k] = neg/len(self.negText)
 
+        for t in self.allTuples:
+            posTuples = self.posSelectedNumTuples[t]
+            nuTuples = self.nuSelectedNumTuples[t]
+            negTuples = self.negSelectedNumTuples[t]
+
+            pos_tuples[t] = posTuples/len(self.posTuples)
+            neutral_tuples[t] = nuTuples/len(self.nuTuples)
+            neg_tuples[t] = negTuples/len(self.negTuples)
+
         # We need to account for the fact that there will be a lot of words used in tweets of every sentiment.
         # Therefore, we reassign the values in the dictionary by subtracting the proportion of tweets in the other
         # sentiments that use that word.
@@ -82,6 +128,10 @@ class Sentiment():
         self.neg_words_adj = {}
         self.pos_words_adj = {}
         self.neutral_words_adj = {}
+
+        self.neg_tuples_adj = {}
+        self.pos_tuples_adj = {}
+        self.neutral_tuples_adj = {}
 
         for key, value in neg_words.items():
             self.neg_words_adj[key] = neg_words[key] - (neutral_words[key] + pos_words[key])
@@ -92,9 +142,17 @@ class Sentiment():
         for key, value in neutral_words.items():
             self.neutral_words_adj[key] = neutral_words[key] - (neg_words[key] + pos_words[key])
 
+        for key, value in neg_tuples.items():
+            self.neg_tuples_adj[key] = neg_tuples[key] - (neutral_tuples[key] + pos_tuples[key])
+
+        for key, value in pos_tuples.items():
+            self.pos_tuples_adj[key] = pos_tuples[key] - (neutral_tuples[key] + neg_tuples[key])
+
+        for key, value in neutral_tuples.items():
+            self.neutral_tuples_adj[key] = neutral_tuples[key] - (neg_tuples[key] + pos_tuples[key])
+
 
     def calculate_selected_text(self, df_row, tol = 0):
-        offset = 0
         tweet = df_row['text']
         sentiment = df_row['sentiment']
 
@@ -137,6 +195,7 @@ class Sentiment():
 
         return ' '.join(selection_str)
 
+
     def clean_text(self, text):
         # remove HTML tags
         text = re.sub(r'<.*?>', '', text)
@@ -176,8 +235,8 @@ def main():
     for index, row in twitter_train[21984:].iterrows():
         # sentimentExtract.extract(row["text"], row["selected_text"], row["sentiment"])
         prediction = sentimentExtract.calculate_selected_text(row, 0.001)
-        # if (index > 50):
-        #     break
+        #if (index > 1000):
+        #    break
         print("text:", row['text'], "\nselected:", row['selected_text'], "\nprediction: ", prediction)
         print("\n\n\n\n")
         sum += jaccard(row['selected_text'], prediction)
