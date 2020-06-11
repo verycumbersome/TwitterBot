@@ -1,5 +1,6 @@
 import pandas as pd
 import string
+import random
 import numpy as np
 import math
 from collections import Counter
@@ -8,10 +9,9 @@ import re
 
 
 class Sentiment():
-    def __init__(self, training, testing):
+    def __init__(self, training):
         # Importing the dataset
         self.training = training
-        self.testing = testing
 
         # this vectorizer will skip stop words
         vectorizer = CountVectorizer(
@@ -170,7 +170,7 @@ class Sentiment():
             dict_to_use = self.neg_words_adj # Calculate word weights using the neg_words dictionary
             tuple_dict = self.neg_tuples_adj
 
-        words = self.clean_text(tweet).split()
+        words = tweet.translate(str.maketrans('','',string.punctuation).split()
         words_len = len(words)
         subsets = [words[i:j+1] for i in range(words_len) for j in range(i,words_len)]
 
@@ -197,7 +197,7 @@ class Sentiment():
                         continue
 
                     if((lst[i][p],lst[i][p+1]) in tuple_dict.keys()):
-                        new_sum += 0.5 * tuple_dict[(lst[i][p],lst[i][p+1])]
+                        new_sum += 0.575 * tuple_dict[(lst[i][p],lst[i][p+1])]
 
             # If the sum is greater than the score, update our current selection
             if(new_sum > score + tol):
@@ -228,7 +228,6 @@ class Sentiment():
 
         if (punc):
             # replace punctuation characters with spaces
-            filters = '!"\'#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n'
             filters = '"\'%()+-/:;<=>@[\\]^_`{|}~\t\n'
             translate_dict = dict((c, " ") for c in filters)
             translate_map = str.maketrans(translate_dict)
@@ -240,25 +239,21 @@ class Sentiment():
 def main():
     # load = np.load('incorrect_indexes.npy')
     # print(load)
-    twitter_train = pd.read_csv('./kaggle/input/tweet-sentiment-extraction/train.csv', delimiter=',')
-    twitter_test = pd.read_csv('./kaggle/input/tweet-sentiment-extraction/test.csv', delimiter=',')
+    twitter_train = pd.read_csv('/kaggle/input/tweet-sentiment-extraction/train.csv', delimiter=',')
+    twitter_test = pd.read_csv('/kaggle/input/tweet-sentiment-extraction/test.csv', delimiter=',')
+    sample = pd.read_csv('/kaggle/input/tweet-sentiment-extraction/sample_submission.csv', delimiter=',')
     twitter_train = twitter_train.dropna()
 
-    sentimentExtract = Sentiment(twitter_train[0:21984], twitter_test)
+    sentimentExtract = Sentiment(twitter_train)
     sentimentExtract.train()
 
-    sum = 0.0
     # Set up training and testing run throughs
-    for index, row in twitter_train[21984:].iterrows():
-        # sentimentExtract.extract(row["text"], row["selected_text"], row["sentiment"])
+    for index, row in twitter_test.iterrows():
         prediction = sentimentExtract.calculate_selected_text(row, 0.001)
-        #if (index > 1000):
-        #    break
-#        print("text:", row['text'], "\nselected:", row['selected_text'], "\nprediction: ", prediction)
-#        print("\n\n\n\n")
-        sum += jaccard(row['selected_text'], prediction)
-    print(((1/len(twitter_train[21984:]))*sum))
+        print(prediction)
+        #sample.loc[sample["textID"] == row["textID"], ["selected_text"]] = prediction
 
+   # sample.to_csv("submission.csv", index=False)
 
 def eval(truth, pred):
     n = len(truth)
@@ -273,6 +268,7 @@ def jaccard(str1, str2):
     b = set(str2.lower().split())
     c = a.intersection(b)
     return float(len(c)) / (len(a) + len(b) - len(c))
+
 
 
 if __name__ == "__main__":
