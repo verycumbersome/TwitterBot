@@ -17,12 +17,10 @@ class Sentiment():
         vectorizer = CountVectorizer(
             stop_words="english",
             preprocessor=self.clean_text,
-            max_features=4000, # Probable best value
-            # min_df = 1 > 0.8447
-            # min_df=50
+            max_features=2000, # Probable best value
         )
         # fit the vectorizer on the text
-        vectorizer.fit(self.training['selected_text'])
+        vectorizer.fit(self.training['text'])
 
         # get the vocabulary
         inv_vocab = {v: k for k, v in vectorizer.vocabulary_.items()}
@@ -35,14 +33,17 @@ class Sentiment():
 
         # Get all words from dataset
         for tweet in tweets[dRow]:
-            cleanTweet = list(set(self.vocabulary) & set(self.clean_text(tweet).split()))
             if (isTuple):
+                cleanTweet = self.clean_text(tweet).split()
                 for index, word in enumerate(cleanTweet):
-                    if (index == len(cleanTweet) - 1):
-                        break
+                    if word not in self.vocabulary:
+                        if (index == len(cleanTweet) - 1):
+                            continue
 
-                    tuples.append((word, cleanTweet[index + 1]))
+                        #print("Word/clean:", word, cleanTweet[index + 1])
+                        tuples.append((word, cleanTweet[index + 1]))
             else:
+                cleanTweet = list(set(self.vocabulary) & set(self.clean_text(tweet).split()))
                 for word in cleanTweet:
                     tuples.append(word)
 
@@ -88,10 +89,14 @@ class Sentiment():
         self.nuNumTuples = Counter(self.nuTuples)
         self.negNumTuples = Counter(self.negTuples)
 
+
         # Counters for positive and negative word occurences
         self.posSelectedNumTuples = Counter(self.selectedPosTuples)
         self.nuSelectedNumTuples = Counter(self.selectedNuTuples)
         self.negSelectedNumTuples = Counter(self.selectedNegTuples)
+
+
+        print(self.posSelectedNumTuples)
 
         self.allTuples = {**self.posNumTuples, **self.nuNumTuples, **self.negNumTuples}
 
@@ -161,9 +166,11 @@ class Sentiment():
 
         elif(sentiment == 'positive'):
             dict_to_use = self.pos_words_adj # Calculate word weights using the pos_words dictionary
+            tuple_dict = self.pos_tuples_adj
 
         elif(sentiment == 'negative'):
             dict_to_use = self.neg_words_adj # Calculate word weights using the neg_words dictionary
+            tuple_dict = self.neg_tuples_adj
 
         words = self.clean_text(tweet).split()
         words_len = len(words)
@@ -178,9 +185,21 @@ class Sentiment():
             new_sum = 0 # Sum for the current substring
 
             # Calculate the sum of weights for each word in the substring
-            for p in range(len(lst[i])):
-                if(lst[i][p] in dict_to_use.keys()):
-                    new_sum += dict_to_use[lst[i][p]]
+            if (len(lst[i]) <= 1):
+                for p in range(len(lst[i])):
+                    if(lst[i][p] in dict_to_use.keys()):
+                        new_sum += dict_to_use[lst[i][p]]
+
+            else:
+                for p in range(len(lst[i])):
+                    if(lst[i][p] in dict_to_use.keys()):
+                        new_sum += dict_to_use[lst[i][p]]
+
+                    if (p + 1) >= len(lst[i]):
+                        continue
+
+                    if((lst[i][p],lst[i][p+1]) in tuple_dict.keys()):
+                        new_sum += 2 * tuple_dict[(lst[i][p],lst[i][p+1])]
 
 #                print(lst[i][p])
             # If the sum is greater than the score, update our current selection
@@ -223,8 +242,8 @@ class Sentiment():
 def main():
     # load = np.load('incorrect_indexes.npy')
     # print(load)
-    twitter_train = pd.read_csv('tweet-sentiment-extraction/train.csv', delimiter=',')
-    twitter_test = pd.read_csv('tweet-sentiment-extraction/test.csv', delimiter=',')
+    twitter_train = pd.read_csv('./kaggle/input/tweet-sentiment-extraction/train.csv', delimiter=',')
+    twitter_test = pd.read_csv('./kaggle/input/tweet-sentiment-extraction/test.csv', delimiter=',')
     twitter_train = twitter_train.dropna()
 
     sentimentExtract = Sentiment(twitter_train[0:21984], twitter_test)
@@ -237,8 +256,8 @@ def main():
         prediction = sentimentExtract.calculate_selected_text(row, 0.001)
         #if (index > 1000):
         #    break
-        print("text:", row['text'], "\nselected:", row['selected_text'], "\nprediction: ", prediction)
-        print("\n\n\n\n")
+#        print("text:", row['text'], "\nselected:", row['selected_text'], "\nprediction: ", prediction)
+#        print("\n\n\n\n")
         sum += jaccard(row['selected_text'], prediction)
     print(((1/len(twitter_train[21984:]))*sum))
 
