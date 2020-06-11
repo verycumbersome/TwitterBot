@@ -17,7 +17,7 @@ class Sentiment():
         vectorizer = CountVectorizer(
             stop_words="english",
             preprocessor=self.clean_text,
-            max_features=2000, # Probable best value
+            max_features=10000, # Probable best value
         )
         # fit the vectorizer on the text
         vectorizer.fit(self.training['text'])
@@ -34,7 +34,7 @@ class Sentiment():
         # Get all words from dataset
         for tweet in tweets[dRow]:
             if (isTuple):
-                cleanTweet = self.clean_text(tweet).split()
+                cleanTweet = self.clean_text(tweet, True).split()
                 for index, word in enumerate(cleanTweet):
                     if word not in self.vocabulary:
                         if (index == len(cleanTweet) - 1):
@@ -95,8 +95,6 @@ class Sentiment():
         self.nuSelectedNumTuples = Counter(self.selectedNuTuples)
         self.negSelectedNumTuples = Counter(self.selectedNegTuples)
 
-
-        print(self.posSelectedNumTuples)
 
         self.allTuples = {**self.posNumTuples, **self.nuNumTuples, **self.negNumTuples}
 
@@ -199,9 +197,8 @@ class Sentiment():
                         continue
 
                     if((lst[i][p],lst[i][p+1]) in tuple_dict.keys()):
-                        new_sum += 2 * tuple_dict[(lst[i][p],lst[i][p+1])]
+                        new_sum += 0.5 * tuple_dict[(lst[i][p],lst[i][p+1])]
 
-#                print(lst[i][p])
             # If the sum is greater than the score, update our current selection
             if(new_sum > score + tol):
                 score = new_sum
@@ -215,7 +212,7 @@ class Sentiment():
         return ' '.join(selection_str)
 
 
-    def clean_text(self, text):
+    def clean_text(self, text, punc=False):
         # remove HTML tags
         text = re.sub(r'<.*?>', '', text)
 
@@ -229,12 +226,13 @@ class Sentiment():
         # convert text to lowercase
         text = text.strip().lower()
 
-        # replace punctuation characters with spaces
-#        filters = '!"\'#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n'
-#        filters = '"\'%()+-/:;<=>@[\\]^_`{|}~\t\n'
-#        translate_dict = dict((c, " ") for c in filters)
-#        translate_map = str.maketrans(translate_dict)
-#        text = text.translate(translate_map)
+        if (punc):
+            # replace punctuation characters with spaces
+            filters = '!"\'#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n'
+            filters = '"\'%()+-/:;<=>@[\\]^_`{|}~\t\n'
+            translate_dict = dict((c, " ") for c in filters)
+            translate_map = str.maketrans(translate_dict)
+            text = text.translate(translate_map)
 
         return text
 
