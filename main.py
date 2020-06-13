@@ -1,5 +1,6 @@
 import pandas as pd
 import string
+import emoji
 import random
 import numpy as np
 import math
@@ -18,28 +19,23 @@ class Sentiment():
             stop_words="english",
             max_features=10000, # Probable best value
         )
-        # fit the cv on the text
-        self.cv.fit(self.training['text'])
 
         self.idf = TfidfVectorizer(
             stop_words="english",
             max_features=10000, # Probable best value
         )
 
-        # print idf values
-        # self.idf = pd.DataFrame(self.cv.idf_, index=self.cv.get_feature_names(), columns=["idf_weights"])
+        # fit the cv on the text
+        self.cv.fit(self.training['text'])
+        self.idf.fit(self.training['text'])
 
 
-        # self.posNum = pd.DataFrame(self.cv.idf_, index=self.cv.get_feature_names(), columns=["idf_weights"])
-
-
-    def calculate_tuples(self, sentiment, dRow, isTuple=1):
+    def calculate_tuples(self, sentiment, dRow):
         tweets = self.training[self.training['sentiment'] == sentiment]
         tuples = []
 
         # Get all words from dataset
         for tweet in tweets[dRow]:
-            if (isTuple):
                 cleanTweet = self.clean_text(tweet, True).split()
                 for index, word in enumerate(cleanTweet):
                     if word not in self.cv.vocabulary_.keys():
@@ -48,10 +44,6 @@ class Sentiment():
 
                         #print("Word/clean:", word, cleanTweet[index + 1])
                         tuples.append((word, cleanTweet[index + 1]))
-            else:
-                cleanTweet = list(set(self.cv.vocabulary_.keys()) & set(self.clean_text(tweet).split()))
-                for word in cleanTweet:
-                    tuples.append(word)
 
         return tuples
 
@@ -66,13 +58,18 @@ class Sentiment():
         nuNum = self.cv.transform(nuText['text'])
         negNum = self.cv.transform(negText['text'])
 
+        posIdfNum = self.idf.transform(posText['text'])
+        nuIdfNum = self.idf.transform(nuText['text'])
+        negIdfNum = self.idf.transform(negText['text'])
+
         posNum = pd.DataFrame(posNum.toarray(), columns=self.cv.get_feature_names())
         nuNum = pd.DataFrame(nuNum.toarray(), columns=self.cv.get_feature_names())
         negNum = pd.DataFrame(negNum.toarray(), columns=self.cv.get_feature_names())
 
-        print(posNum.sum())
+        posIdfNum = pd.DataFrame(posIdfNum.toarray(), columns=self.idf.get_feature_names())
+        nuIdfNum = pd.DataFrame(nuIdfNum.toarray(), columns=self.idf.get_feature_names())
+        negIdfNum = pd.DataFrame(negIdfNum.toarray(), columns=self.idf.get_feature_names())
 
-        # print(self.cv.vocabulary_)
         # Get all words from dataset
         self.posTuples = self.calculate_tuples("positive", "text")
         self.nuTuples = self.calculate_tuples("neutral", "text")
@@ -105,13 +102,9 @@ class Sentiment():
         neg_tuples = {}
 
         for k in self.cv.vocabulary_.keys():
-            pos = posNum[k].sum()
-            neutral = nuNum[k].sum()
-            neg = negNum[k].sum()
-
-            pos_words[k] = pos/len(posText)
-            neutral_words[k] = neutral/len(nuText)
-            neg_words[k] = neg/len(negText)
+            pos_words[k] = posNum[k].sum()
+            neutral_words[k] = nuNum[k].sum()
+            neg_words[k] = negNum[k].sum()
 
         for t in self.allTuples:
             posTuples = self.posSelectedNumTuples[t]
@@ -121,7 +114,6 @@ class Sentiment():
             pos_tuples[t] = posTuples/len(self.posTuples)
             neutral_tuples[t] = nuTuples/len(self.nuTuples)
             neg_tuples[t] = negTuples/len(self.negTuples)
-
 
         # We need to account for the fact that there will be a lot of words used in tweets of every sentiment.
         # Therefore, we reassign the values in the dictionary by subtracting the proportion of tweets in the other
@@ -219,11 +211,21 @@ class Sentiment():
         text = re.sub(r"\\", "", text)
         text = re.sub(r"\'", "", text)
         text = re.sub(r"\"", "", text)
-        #pattern = r'[^a-zA-z0-9\s]'
-        #text = re.sub(pattern, '', text)
 
         # convert text to lowercase
         text = text.strip().lower()
+        text = emoji.demojize(text)
+
+        emoji_pattern = re.compile("["
+                u"\U0001F600-\U0001F64F"  # emoticons
+                u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+                u"\U0001F680-\U0001F6FF"  # transport & map symbols
+                u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
+                u"\U00002702-\U000027B0"
+                u"\U000024C2-\U0001F251"
+                "]+", flags=re.UNICODE)
+        text = emoji_pattern.sub(r'', text)
+
 
         if (punc):
             # replace punctuation characters with spaces
@@ -246,7 +248,7 @@ def main():
     # Set up training and testing run throughs
     for index, row in twitter_train[21984:].iterrows():
         prediction = sentimentExtract.calculate_selected_text(row, 0.001)
-        # if (index > 1000):
+        # if (index > 10):
             # break
         print("text:", row['text'], "\nselected:", row['selected_text'], "\nprediction: ", prediction)
         print("\n\n\n\n")
