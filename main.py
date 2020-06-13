@@ -4,7 +4,7 @@ import random
 import numpy as np
 import math
 from collections import Counter
-from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 import re
 
 
@@ -13,18 +13,24 @@ class Sentiment():
         # Importing the dataset
         self.training = training
 
-        # this vectorizer will skip stop words
-        vectorizer = CountVectorizer(
+        # this cv will skip stop words
+        self.cv = CountVectorizer(
             stop_words="english",
-            preprocessor=self.clean_text,
             max_features=10000, # Probable best value
         )
-        # fit the vectorizer on the text
-        vectorizer.fit(self.training['text'])
+        # fit the cv on the text
+        self.cv.fit(self.training['text'])
 
-        # get the vocabulary
-        inv_vocab = {v: k for k, v in vectorizer.vocabulary_.items()}
-        self.vocabulary = [inv_vocab[i] for i in range(len(inv_vocab))]
+        self.idf = TfidfVectorizer(
+            stop_words="english",
+            max_features=10000, # Probable best value
+        )
+
+        # print idf values
+        # self.idf = pd.DataFrame(self.cv.idf_, index=self.cv.get_feature_names(), columns=["idf_weights"])
+
+
+        # self.posNum = pd.DataFrame(self.cv.idf_, index=self.cv.get_feature_names(), columns=["idf_weights"])
 
 
     def calculate_tuples(self, sentiment, dRow, isTuple=1):
@@ -36,14 +42,14 @@ class Sentiment():
             if (isTuple):
                 cleanTweet = self.clean_text(tweet, True).split()
                 for index, word in enumerate(cleanTweet):
-                    if word not in self.vocabulary:
+                    if word not in self.cv.vocabulary_.keys():
                         if (index == len(cleanTweet) - 1):
                             continue
 
                         #print("Word/clean:", word, cleanTweet[index + 1])
                         tuples.append((word, cleanTweet[index + 1]))
             else:
-                cleanTweet = list(set(self.vocabulary) & set(self.clean_text(tweet).split()))
+                cleanTweet = list(set(self.cv.vocabulary_.keys()) & set(self.clean_text(tweet).split()))
                 for word in cleanTweet:
                     tuples.append(word)
 
@@ -52,15 +58,21 @@ class Sentiment():
 
     def train(self):
         # Get all words from dataset
-        self.posText = self.calculate_tuples("positive", "text", 0)
-        self.nuText = self.calculate_tuples("neutral", "text", 0)
-        self.negText = self.calculate_tuples("negative", "text", 0)
+        posText = self.training[self.training['sentiment'] == 'positive']
+        nuText = self.training[self.training['sentiment'] == 'neutral']
+        negText = self.training[self.training['sentiment'] == 'negative']
 
-        # Get all words from selected dataset
-        self.selectedPosText = self.calculate_tuples("positive", "selected_text", 0)
-        self.selectedNuText = self.calculate_tuples("neutral", "selected_text", 0)
-        self.selectedNegText = self.calculate_tuples("negative", "selected_text", 0)
+        posNum = self.cv.transform(posText['text'])
+        nuNum = self.cv.transform(nuText['text'])
+        negNum = self.cv.transform(negText['text'])
 
+        posNum = pd.DataFrame(posNum.toarray(), columns=self.cv.get_feature_names())
+        nuNum = pd.DataFrame(nuNum.toarray(), columns=self.cv.get_feature_names())
+        negNum = pd.DataFrame(negNum.toarray(), columns=self.cv.get_feature_names())
+
+        print(posNum.sum())
+
+        # print(self.cv.vocabulary_)
         # Get all words from dataset
         self.posTuples = self.calculate_tuples("positive", "text")
         self.nuTuples = self.calculate_tuples("neutral", "text")
@@ -71,24 +83,10 @@ class Sentiment():
         self.selectedNuTuples = self.calculate_tuples("neutral", "selected_text")
         self.selectedNegTuples = self.calculate_tuples("negative", "selected_text")
 
-        # Get counters for all word in classifications
-        self.numReviewsTotal = len(self.training)
-
-        # Counters for positive and negative word occurences
-        self.posNum = Counter(self.posText)
-        self.nuNum = Counter(self.posText)
-        self.negNum = Counter(self.negText)
-
-        # Counters for positive and negative word occurences
-        self.posSelectedNum = Counter(self.selectedPosText)
-        self.nuSelectedNum = Counter(self.selectedPosText)
-        self.negSelectedNum = Counter(self.selectedNegText)
-
         # Counters for positive and negative word occurences
         self.posNumTuples = Counter(self.posTuples)
         self.nuNumTuples = Counter(self.nuTuples)
         self.negNumTuples = Counter(self.negTuples)
-
 
         # Counters for positive and negative word occurences
         self.posSelectedNumTuples = Counter(self.selectedPosTuples)
@@ -106,14 +104,14 @@ class Sentiment():
         neutral_tuples = {}
         neg_tuples = {}
 
-        for k in self.vocabulary:
-            pos = self.posNum[k]
-            neutral = self.nuNum[k]
-            neg = self.negNum[k]
+        for k in self.cv.vocabulary_.keys():
+            pos = posNum[k].sum()
+            neutral = nuNum[k].sum()
+            neg = negNum[k].sum()
 
-            pos_words[k] = pos/len(self.posText)
-            neutral_words[k] = neutral/len(self.nuText)
-            neg_words[k] = neg/len(self.negText)
+            pos_words[k] = pos/len(posText)
+            neutral_words[k] = neutral/len(nuText)
+            neg_words[k] = neg/len(negText)
 
         for t in self.allTuples:
             posTuples = self.posSelectedNumTuples[t]
@@ -123,6 +121,7 @@ class Sentiment():
             pos_tuples[t] = posTuples/len(self.posTuples)
             neutral_tuples[t] = nuTuples/len(self.nuTuples)
             neg_tuples[t] = negTuples/len(self.negTuples)
+
 
         # We need to account for the fact that there will be a lot of words used in tweets of every sentiment.
         # Therefore, we reassign the values in the dictionary by subtracting the proportion of tweets in the other
@@ -170,7 +169,7 @@ class Sentiment():
             dict_to_use = self.neg_words_adj # Calculate word weights using the neg_words dictionary
             tuple_dict = self.neg_tuples_adj
 
-        words = tweet.translate(str.maketrans('','',string.punctuation).split()
+        words = self.clean_text(tweet).split()
         words_len = len(words)
         subsets = [words[i:j+1] for i in range(words_len) for j in range(i,words_len)]
 
@@ -235,25 +234,25 @@ class Sentiment():
 
         return text
 
-
 def main():
-    # load = np.load('incorrect_indexes.npy')
-    # print(load)
-    twitter_train = pd.read_csv('/kaggle/input/tweet-sentiment-extraction/train.csv', delimiter=',')
-    twitter_test = pd.read_csv('/kaggle/input/tweet-sentiment-extraction/test.csv', delimiter=',')
-    sample = pd.read_csv('/kaggle/input/tweet-sentiment-extraction/sample_submission.csv', delimiter=',')
+    twitter_train = pd.read_csv('./kaggle/input/tweet-sentiment-extraction/train.csv', delimiter=',')
+    twitter_test = pd.read_csv('./kaggle/input/tweet-sentiment-extraction/test.csv', delimiter=',')
     twitter_train = twitter_train.dropna()
 
-    sentimentExtract = Sentiment(twitter_train)
+    sentimentExtract = Sentiment(twitter_train[0:21984])
     sentimentExtract.train()
 
+    sum = 0.0
     # Set up training and testing run throughs
-    for index, row in twitter_test.iterrows():
+    for index, row in twitter_train[21984:].iterrows():
         prediction = sentimentExtract.calculate_selected_text(row, 0.001)
-        print(prediction)
-        #sample.loc[sample["textID"] == row["textID"], ["selected_text"]] = prediction
+        # if (index > 1000):
+            # break
+        print("text:", row['text'], "\nselected:", row['selected_text'], "\nprediction: ", prediction)
+        print("\n\n\n\n")
+        sum += jaccard(row['selected_text'], prediction)
+    print(((1/len(twitter_train[21984:]))*sum))
 
-   # sample.to_csv("submission.csv", index=False)
 
 def eval(truth, pred):
     n = len(truth)
