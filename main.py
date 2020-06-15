@@ -1,11 +1,13 @@
 import pandas as pd
 import string
 import emoji
-import random
+import torch
+import transformers as ppb # pytorch transformersimport random
 import numpy as np
 import math
 from collections import Counter
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from keras.preprocessing.sequence import pad_sequences
 import re
 
 
@@ -29,6 +31,27 @@ class Sentiment():
         self.cv.fit(self.training['text'])
         self.idf.fit(self.training['text'])
 
+        # Initialize BERT model
+        model_class = ppb.DistilBertModel
+        tokenizer_class =  ppb.DistilBertTokenizer
+        pretrained_weights = 'distilbert-base-uncased'
+
+        tokenizer = tokenizer_class.from_pretrained(pretrained_weights)
+        model = model_class.from_pretrained(pretrained_weights)
+
+        tokenized = self.training["text"].apply((lambda x: tokenizer.encode(x, add_special_tokens=True)))
+
+        print(tokenized.str.pad(15, side ='left'))
+
+        padded = pad_sequences(tokenized)
+
+        input_ids = torch.tensor(np.array(padded))
+
+        with torch.no_grad():
+            last_hidden_states = model(input_ids)
+
+         # Slice the output for the first position for all the sequences, take all hidden unit outputs
+        features = last_hidden_states[0][:,0,:].numpy()
 
     def calculate_tuples(self, sentiment, dRow):
         tweets = self.training[self.training['sentiment'] == sentiment]
