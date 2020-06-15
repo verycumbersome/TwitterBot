@@ -1,4 +1,6 @@
 import pandas as pd
+from transformers import *
+import tokenizers
 import string
 import emoji
 import torch
@@ -260,6 +262,18 @@ class Sentiment():
         return text
 
 def main():
+    tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
+    tokenizer.save_vocabulary('.')
+
+    MAX_LEN = 96
+    tokenizer = tokenizers.ByteLevelBPETokenizer(
+            vocab_file='vocab.json',
+            merges_file='merges.txt',
+            lowercase=True,
+            add_prefix_space=True
+            )
+    sentiment_id = {'positive': 1313, 'negative': 2430, 'neutral': 7974}
+
     twitter_train = pd.read_csv('./kaggle/input/tweet-sentiment-extraction/train.csv', delimiter=',')
     twitter_test = pd.read_csv('./kaggle/input/tweet-sentiment-extraction/test.csv', delimiter=',')
     twitter_train = twitter_train.dropna()
@@ -267,16 +281,16 @@ def main():
     sentimentExtract = Sentiment(twitter_train[0:21984])
     sentimentExtract.train()
 
-    sum = 0.0
-    # Set up training and testing run throughs
-    for index, row in twitter_train[21984:].iterrows():
-        prediction = sentimentExtract.calculate_selected_text(row, 0.001)
-        # if (index > 10):
-            # break
-        print("text:", row['text'], "\nselected:", row['selected_text'], "\nprediction: ", prediction)
-        print("\n\n\n\n")
-        sum += jaccard(row['selected_text'], prediction)
-    print(((1/len(twitter_train[21984:]))*sum))
+    # sum = 0.0
+    # # Set up training and testing run throughs
+    # for index, row in twitter_train[21984:].iterrows():
+        # prediction = sentimentExtract.calculate_selected_text(row, 0.001)
+        # # if (index > 10):
+            # # break
+        # print("text:", row['text'], "\nselected:", row['selected_text'], "\nprediction: ", prediction)
+        # print("\n\n\n\n")
+        # sum += jaccard(row['selected_text'], prediction)
+    # print(((1/len(twitter_train[21984:]))*sum))
 
 
 def eval(truth, pred):
